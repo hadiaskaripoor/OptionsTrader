@@ -62,19 +62,50 @@ def _get_all_tradable_equities():
     client = TradingClient(config.ALPACA_API_KEY, config.ALPACA_SECRET_KEY, paper=True)
     req = GetAssetsRequest(asset_class=AssetClass.US_EQUITY, status=AssetStatus.ACTIVE)
     assets = client.get_all_assets(req)
-    # tradable, simple ticker symbols only (skip warrants/units/etc with
-    # non-alpha characters), sorted for deterministic capping below
-    symbols = sorted(a.symbol for a in assets if a.tradable and a.symbol.isalpha())
-    return symbols
+
+    # Pre-filter using attributes Alpaca already gives us for free (no
+    # per-symbol API calls needed): major exchanges only, marginable and
+    # shortable. This is a cheap proxy for "not a thin OTC/micro-cap
+    # name" and shrinks the pool a lot before the expensive per-symbol
+    # liquidity check below -- without this, a plain alphabetical slice
+    # of the full ~12,900 tradable list is dominated by illiquid names
+    # and barely covers past the first couple letters of the alphabet.
+    major_exchanges = {"NASDAQ", "NYSE", "ARCA", "AMEX", "BATS"}
+
+    def _exchange_str(a):
+        exch = getattr(a, "exchange", None)
+        if exch is None:
+            return ""
+        return str(exch).split(".")[-1].upper()
+
+    tradable_alpha = [a for a in assets if a.tradable and a.symbol.isalpha()]
+    marginable = [a for a in tradable_alpha if getattr(a, "marginable", False)]
+    shortable = [a for a in marginable if getattr(a, "shortable", False)]
+    on_major_exchange = [a for a in shortable if _exchange_str(a) in major_exchanges]
+
+    print(f"[universe] filter funnel: {len(assets)} total -> {len(tradable_alpha)} tradable/alpha "
+          f"-> {len(marginable)} marginable -> {len(shortable)} shortable -> "
+          f"{len(on_major_exchange)} on major exchange")
+
+    return sorted(a.symbol for a in on_major_exchange)
+
 
 
 def _rank_by_liquidity(symbols):
+    import random
+
     dcfg = config.DYNAMIC_UNIVERSE
-    capped = symbols[: dcfg["max_symbols_to_screen"]]
-    if len(symbols) > len(capped):
-        print(f"[universe] {len(symbols)} tradable equities found, screening the first "
-              f"{len(capped)} alphabetically (max_symbols_to_screen cap) to bound build "
-              f"time -- increase this in config.py if you're willing to wait longer.")
+    if len(symbols) > dcfg["max_symbols_to_screen"]:
+        rng = random.Random(42)
+        capped = rng.sample(symbols, dcfg["max_symbols_to_screen"])
+        print(f"[universe] {len(symbols)} candidates after exchange/marginable pre-filter, "
+              f"randomly sampling {len(capped)} to screen for liquidity (max_symbols_to_screen cap) "
+              f"-- increase this in config.py if you're willing to wait longer.")
+    else:
+        capped = symbols
+        print(f"[universe] {len(symbols)} candidates after exchange/marginable pre-filter, screening all of them.")
+
+
 
     scored = []
     for i, sym in enumerate(capped):
