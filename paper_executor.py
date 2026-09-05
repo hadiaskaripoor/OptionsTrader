@@ -163,3 +163,27 @@ def reconcile_open_trades():
             closed.append((trade["id"], pnl, reason))
 
     return closed
+
+def force_close_all_open_trades(reason="daily force-close: no overnight positions"):
+    """
+    Unconditionally closes every still-open trade, regardless of exit
+    rules. Used at the end of the daemon's daily window when
+    config.DAEMON['force_close_daily'] is True, so nothing carries
+    overnight risk.
+
+    If a fresh price can't be fetched for a position (data gap), this
+    falls back to closing it flat at its entry price rather than leaving
+    it open -- guarantees "no overnight" but will understate P&L if the
+    price genuinely moved and just couldn't be re-fetched.
+    """
+    closed = []
+    for trade in trade_logger.get_open_trades():
+        current_price, _ = _current_price_for_open_trade(trade)
+        if current_price is None:
+            current_price = trade["entry_price"]
+            note = f"{reason} (price unavailable, closed flat at entry price)"
+        else:
+            note = reason
+        pnl = trade_logger.close_trade(trade["id"], current_price, notes=note)
+        closed.append((trade["id"], pnl, note))
+    return closed

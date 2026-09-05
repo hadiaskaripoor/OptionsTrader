@@ -60,7 +60,7 @@ def log_signal(signal: dict):
             datetime.now(timezone.utc).isoformat(),
             signal.get("strategy"),
             signal.get("symbol"),
-            json.dumps(signal),
+            json.dumps(signal, default=str),
         ),
     )
     conn.commit()

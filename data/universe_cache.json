@@ -1,10 +1,28 @@
 {
   "symbols": [
-    "AAPL",
-    "AMZN",
+    "SPY",
+    "NVDA",
+    "SNDK",
+    "TSLA",
     "AMD",
-    "AMAT",
-    "APP"
+    "GDX",
+    "IBIT",
+    "XLF",
+    "LLY",
+    "NFLX",
+    "TLT",
+    "WDC",
+    "ORCL",
+    "GLD",
+    "CAT",
+    "IGV",
+    "EWY",
+    "XLP",
+    "XBI",
+    "IEFA",
+    "JPM",
+    "BABA",
+    "GLW"
   ],
   "built_at": "2026-09-05"
 }

@@ -107,10 +107,12 @@ DASHBOARD_EXPORT_PATH = os.path.join(os.path.dirname(__file__), "data", "dashboa
 # DAEMON MODE (unattended run during work hours)
 # ---------------------------------------------------------------------------
 DAEMON = {
-    "start_time": "09:35",     # local time, wait a few min after open for quotes to stabilize
-    "stop_time": "15:55",      # local time, stop before close
-    "scan_interval_minutes": 30,
-    "weekdays_only": True,
+    "start_time": "23:09",     # local time, wait a few min after open for quotes to stabilize
+    "stop_time": "23:19",      # local time, stop before close
+    "scan_interval_minutes": 1,
+    "weekdays_only": False,
+    "force_close_daily": True,  # close every open position before stopping each day -- no overnight risk
+
 }
 
 # ---------------------------------------------------------------------------

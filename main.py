@@ -193,6 +193,11 @@ def run_daemon():
     for trade_id, pnl, reason in closed:
         print(f"[closed] trade {trade_id}: P&L ${pnl:.2f} ({reason})")
 
+    if config.DAEMON.get("force_close_daily", False):
+        forced = paper_executor.force_close_all_open_trades()
+        for trade_id, pnl, reason in forced:
+            print(f"[closed] trade {trade_id}: P&L ${pnl:.2f} ({reason})")
+
     changes = adapt.run_adaptation()
     print("\nAdaptation results:")
     for c in changes:
