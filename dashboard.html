@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Options Paper Trading Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a;
+    --text: #e6e8ec; --muted: #9aa1ac;
+    --green: #35c48c; --red: #e05a5a; --blue: #5b8def; --amber: #e0a75b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0; padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .card .value { font-size: 22px; font-weight: 600; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 32px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 11px; }
+  tr:hover { background: rgba(255,255,255,0.02); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; }
+  .tag-long_option { background: rgba(91,141,239,0.15); color: var(--blue); }
+  .tag-covered_call { background: rgba(224,167,91,0.15); color: var(--amber); }
+  .tag-credit_spread { background: rgba(53,196,140,0.15); color: var(--green); }
+  section h2 { font-size: 15px; margin: 0 0 12px; }
+  .empty { color: var(--muted); font-style: italic; padding: 16px 0; }
+  #fileInput { margin-bottom: 20px; }
+  .status-open { color: var(--amber); } .status-closed { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1>Options Paper Trading Dashboard</h1>
+<div class="sub" id="genAt">No data loaded yet.</div>
+
+<input type="file" id="fileInput" accept="application/json">
+<div class="sub">Load <code>data/dashboard_data.json</code> (produced by <code>export_dashboard_data.py</code>). Re-run the export script and re-select the file to refresh.</div>
+
+<div class="grid" id="summaryCards"></div>
+
+<section>
+  <h2>Open Positions</h2>
+  <div id="openTrades"></div>
+</section>
+
+<section>
+  <h2>Trade History</h2>
+  <div id="allTrades"></div>
+</section>
+
+<section>
+  <h2>Recent Signals</h2>
+  <div id="signals"></div>
+</section>
+
+<script>
+function fmtMoney(n) {
+  if (n === null || n === undefined) return "-";
+  const sign = n >= 0 ? "" : "-";
+  return sign + "$" + Math.abs(n).toFixed(2);
+}
+function pnlClass(n) { return (n || 0) >= 0 ? "pos" : "neg"; }
+function strategyTag(s) {
+  return `<span class="tag tag-${s}">${s.replace('_',' ')}</span>`;
+}
+
+function renderSummary(summary) {
+  const cards = [
+    ["Total Closed Trades", summary.total_closed_trades],
+    ["Open Trades", summary.open_trades],
+    ["Total P&L", fmtMoney(summary.total_pnl), pnlClass(summary.total_pnl)],
+    ["Win Rate", (summary.win_rate * 100).toFixed(1) + "%"],
+    ["Avg Win", fmtMoney(summary.avg_win), "pos"],
+    ["Avg Loss", fmtMoney(summary.avg_loss), "neg"],
+  ];
+  const el = document.getElementById("summaryCards");
+  el.innerHTML = cards.map(([label, value, cls]) => `
+    <div class="card">
+      <div class="label">${label}</div>
+      <div class="value ${cls || ''}">${value}</div>
+    </div>
+  `).join("");
+}
+
+function renderOpenTrades(trades) {
+  const el = document.getElementById("openTrades");
+  if (!trades.length) { el.innerHTML = '<div class="empty">No open positions.</div>'; return; }
+  el.innerHTML = `<table>
+    <tr><th>Opened</th><th>Strategy</th><th>Symbol</th><th>Contract</th><th>Action</th><th>Entry</th><th>Qty</th></tr>
+    ${trades.map(t => `
+      <tr>
+        <td>${new Date(t.ts_opened).toLocaleString()}</td>
+        <td>${strategyTag(t.strategy)}</td>
+        <td>${t.symbol}</td>
+        <td>${t.contract_desc}</td>
+        <td>${t.action}</td>
+        <td>${fmtMoney(t.entry_price)}</td>
+        <td>${t.quantity}</td>
+      </tr>`).join("")}
+  </table>`;
+}
+
+function renderAllTrades(trades) {
+  const el = document.getElementById("allTrades");
+  if (!trades.length) { el.innerHTML = '<div class="empty">No trades logged yet.</div>'; return; }
+  el.innerHTML = `<table>
+    <tr><th>Opened</th><th>Closed</th><th>Strategy</th><th>Symbol</th><th>Contract</th><th>Entry</th><th>Exit</th><th>P&L</th><th>Status</th></tr>
+    ${trades.map(t => `
+      <tr>
+        <td>${new Date(t.ts_opened).toLocaleString()}</td>
+        <td>${t.ts_closed ? new Date(t.ts_closed).toLocaleString() : '-'}</td>
+        <td>${strategyTag(t.strategy)}</td>
+        <td>${t.symbol}</td>
+        <td>${t.contract_desc}</td>
+        <td>${fmtMoney(t.entry_price)}</td>
+        <td>${fmtMoney(t.exit_price)}</td>
+        <td class="${pnlClass(t.pnl)}">${t.pnl !== null ? fmtMoney(t.pnl) : '-'}</td>
+        <td class="status-${t.status}">${t.status}</td>
+      </tr>`).join("")}
+  </table>`;
+}
+
+function renderSignals(signals) {
+  const el = document.getElementById("signals");
+  if (!signals.length) { el.innerHTML = '<div class="empty">No signals logged yet.</div>'; return; }
+  el.innerHTML = `<table>
+    <tr><th>Time</th><th>Strategy</th><th>Symbol</th><th>Taken?</th><th>Details</th></tr>
+    ${signals.map(s => {
+      const d = JSON.parse(s.signal_json);
+      return `
+      <tr>
+        <td>${new Date(s.ts).toLocaleString()}</td>
+        <td>${strategyTag(s.strategy)}</td>
+        <td>${s.symbol}</td>
+        <td>${s.taken ? 'yes' : 'no'}</td>
+        <td>${d.reason || ''}</td>
+      </tr>`;
+    }).join("")}
+  </table>`;
+}
+
+document.getElementById("fileInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    const data = JSON.parse(evt.target.result);
+    document.getElementById("genAt").textContent = "Data generated at " + new Date(data.generated_at).toLocaleString();
+    renderSummary(data.summary);
+    renderOpenTrades(data.open_trades);
+    renderAllTrades(data.all_trades);
+    renderSignals(data.recent_signals);
+  };
+  reader.readAsText(file);
+});
+</script>
+
+</body>
+</html>
